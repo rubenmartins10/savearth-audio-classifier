@@ -2,14 +2,51 @@ import os
 import numpy as np
 import librosa
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, f1_score
 
 DATASET_PATH = r"dataset (1)\dataset"
 
-# Percorro todas as pastas do dataset, carrego cada ficheiro de áudio
-# e extraio os MFCCs como features
+# Agora extraio mais features para além dos MFCCs
+# Quanto mais informação der ao modelo, melhor ele consegue distinguir os géneros
+def extrair_features(caminho):
+    y, sr = librosa.load(caminho, duration=30)
+
+    # MFCCs - representam o timbre do som (13 coeficientes)
+    mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
+    mfcc_mean = np.mean(mfcc, axis=1)
+
+    # Chroma - representa as notas musicais presentes (dó, ré, mi, etc.)
+    chroma = librosa.feature.chroma_stft(y=y, sr=sr)
+    chroma_mean = np.mean(chroma, axis=1)
+
+    # Spectral contrast - diferença entre picos e vales do espectro
+    # ajuda a distinguir música com muita energia (metal) de música suave (classical)
+    contrast = librosa.feature.spectral_contrast(y=y, sr=sr)
+    contrast_mean = junto = np.mean(contrast, axis=1)
+
+    # Zero crossing rate - quantas vezes o sinal cruza o zero por segundo
+    # sons percussivos (hiphop) têm valores altos, sons suaves têm valores baixos
+    zcr = librosa.feature.zero_crossing_rate(y)
+    zcr_mean = np.mean(zcr)
+
+    # RMS energy - energia média do sinal (volume)
+    rms = librosa.feature.rms(y=y)
+    rms_mean = np.mean(rms)
+
+    # junto tudo num único vector de features
+    features = np.concatenate([
+        mfcc_mean,       # 13 valores
+        chroma_mean,     # 12 valores
+        contrast_mean,   # 7 valores
+        [zcr_mean],      # 1 valor
+        [rms_mean]       # 1 valor
+    ])
+
+    return features
+
+
 def carregar_dados(dataset_path):
     labels = []
     features = []
@@ -25,17 +62,9 @@ def carregar_dados(dataset_path):
 
             caminho = os.path.join(pasta_genero, ficheiro)
             try:
-                # carrego o áudio (só 30 segundos)
-                y, sr = librosa.load(caminho, duration=30)
-
-                # extraio 13 MFCCs e faço a média ao longo do tempo
-                # assim cada música fica representada por 13 números
-                mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
-                mfcc_mean = np.mean(mfcc, axis=1)
-
-                features.append(mfcc_mean)
+                f = extrair_features(caminho)
+                features.append(f)
                 labels.append(genero)
-
             except Exception as e:
                 print(f"✗ Erro em {ficheiro}: {e}")
 
@@ -44,32 +73,32 @@ def carregar_dados(dataset_path):
 
 print("A carregar os dados...")
 X, y = carregar_dados(DATASET_PATH)
-print(f"Total: {len(X)} ficheiros | Géneros: {np.unique(y)}\n")
+print(f"Total: {len(X)} ficheiros carregados\n")
 
-# Converto os géneros (strings) em números para o modelo perceber
-# ex: blues=0, classical=1, rock=9, etc.
+# Converto os géneros em números
 le = LabelEncoder()
 y_encoded = le.fit_transform(y)
 
 # Divido em treino (80%) e teste (20%)
-# O modelo aprende com o treino e é avaliado no teste
 X_train, X_test, y_train, y_test = train_test_split(
     X, y_encoded, test_size=0.2, random_state=42
 )
 
-# Treino o modelo - Random Forest é um bom ponto de partida
-# usa várias árvores de decisão e combina os resultados
+# Normalizo as features - importante quando temos features com escalas diferentes
+# ex: RMS vai de 0 a 1, MFCCs podem ir de -500 a 500
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+# Treino o modelo com mais árvores para melhor resultado
 print("A treinar o modelo...")
-modelo = RandomForestClassifier(n_estimators=100, random_state=42)
+modelo = RandomForestClassifier(n_estimators=200, random_state=42)
 modelo.fit(X_train, y_train)
 
-# Avalio o modelo no conjunto de teste (dados que nunca viu)
+# Avalio os resultados
 y_pred = modelo.predict(X_test)
-
-# F1-score geral
 f1 = f1_score(y_test, y_pred, average="weighted")
-print(f"\nF1-score: {f1:.4f}")
 
-# Relatório detalhado por género
+print(f"\nF1-score: {f1:.4f}")
 print("\nResultados por género:")
 print(classification_report(y_test, y_pred, target_names=le.classes_))
