@@ -11,7 +11,7 @@ Modelo de deep learning para classificação automática de géneros musicais a 
 
 ## Como funciona
 
-Cada ficheiro de áudio é dividido em segmentos de 3 segundos. Cada segmento é convertido num **mel-spectrogram** — uma representação visual do som — e passado a uma **CNN** que aprende a distinguir os padrões de cada género musical.
+Cada ficheiro de áudio é dividido em segmentos de 3 segundos. Cada segmento é convertido num **mel-spectrogram**, uma representação visual do som, e passado a uma **CNN** que aprende a distinguir os padrões de cada género musical.
 
 Na previsão, o modelo analisa todos os segmentos da música e combina os resultados (majority voting) para dar uma resposta final com percentagem de confiança.
 
