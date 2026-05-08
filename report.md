@@ -1,67 +1,47 @@
 # Relatório Técnico — Music Genre Classifier
 
-## Problema
+## O Problema
 
-Classificação automática de géneros musicais a partir de ficheiros de áudio `.wav` em 10 categorias: blues, classical, country, disco, hiphop, jazz, metal, pop, reggae e rock.
+O objetivo era construir um modelo capaz de ouvir um ficheiro de áudio e identificar automaticamente o género musical — blues, jazz, rock, entre outros. É um problema de classificação multi-classe com 10 categorias.
 
 ## Dataset
 
-- **GTZAN Music Genre Dataset** — 1000 ficheiros `.wav` de 30 segundos cada
-- 10 géneros com 100 ficheiros por género
-- 1 ficheiro corrompido ignorado (`jazz.00054.wav`)
+Trabalhei com o dataset GTZAN, que contém 1000 ficheiros de áudio em formato `.wav`, com 30 segundos cada, divididos em 10 géneros com 100 ficheiros por género. Um ficheiro estava corrompido (`jazz.00054.wav`) e foi ignorado automaticamente.
 
-## Abordagem
+## As decisões que tomei e porquê
 
-### 1. Pré-processamento
+### Segmentar em vez de usar o áudio inteiro
 
-Em vez de usar os 30 segundos de cada música como uma única amostra, dividi cada ficheiro em **segmentos de 5 segundos**. Esta decisão foi fundamental — passou de ~1000 para ~6000 amostras, o que é muito mais adequado para treinar uma CNN.
+A primeira decisão importante foi não usar os 30 segundos de cada música como uma única amostra. Em vez disso, dividi cada ficheiro em segmentos de 5 segundos.
 
-Cada segmento é convertido num **mel-spectrogram** de 128x128 pixels. O mel-spectrogram representa o som como uma imagem 2D onde:
-- O eixo X representa o tempo
-- O eixo Y representa as frequências (escala Mel, logarítmica)
-- A intensidade da cor representa a energia em cada frequência
+O motivo é simples: uma CNN precisa de dados para aprender. Com 1000 ficheiros teria muito poucas amostras. Ao segmentar em janelas de 5 segundos, passei para ~6000 amostras — muito mais adequado para treinar uma rede neuronal.
 
-Escolhi mel-spectrogram em vez de MFCC porque preserva mais informação espectral, o que é vantajoso para uma CNN que aprende padrões visuais.
+### Mel-spectrogram como representação do som
 
-### 2. Data Augmentation
+Para o modelo conseguir "ver" o áudio, converti cada segmento num mel-spectrogram — uma imagem 2D onde o eixo X representa o tempo, o eixo Y representa as frequências, e a cor representa a energia em cada frequência.
 
-Para aumentar a robustez do modelo, apliquei data augmentation no áudio bruto antes da conversão para mel-spectrogram. Para cada ficheiro original gerei uma versão aumentada com uma das seguintes técnicas escolhida aleatoriamente:
+Escolhi mel-spectrogram em vez de MFCC porque preserva mais informação espectral. Para uma CNN que aprende padrões visuais, mais detalhe é melhor.
 
-- **Pitch shift** (±2 semitons) — simula músicas em diferentes afinações
-- **Time stretch** (0.85x a 1.15x) — simula variações de tempo
-- **Ruído branco** — simula gravações com ruído de fundo
-- **Alteração de volume** (0.7x a 1.3x) — simula diferentes volumes de gravação
+### Data augmentation no áudio bruto
 
-Isto duplicou o dataset para ~12000 amostras de treino.
+Com ~6000 amostras o modelo ainda podia fazer overfitting. Para resolver isso, apliquei data augmentation — para cada ficheiro original gerei uma versão modificada com uma destas técnicas:
 
-### 3. Arquitectura CNN
+- **Pitch shift** — mudo o tom ligeiramente (±2 semitons)
+- **Time stretch** — acelero ou abrando o áudio (0.85x a 1.15x)
+- **Ruído branco** — adiciono ruído de fundo suave
+- **Alteração de volume** — torno o áudio mais alto ou mais baixo
 
-Input (128x128x1)
-→ Conv2D(32) + BatchNorm + MaxPool + Dropout(0.25)
-→ Conv2D(64) + BatchNorm + MaxPool + Dropout(0.25)
-→ Conv2D(128) + BatchNorm + MaxPool + Dropout(0.25)
-→ Conv2D(256) + BatchNorm + MaxPool + Dropout(0.30)
-→ GlobalAveragePooling2D
-→ Dense(256) + Dropout(0.50)
-→ Dense(10, softmax)
+Isto duplicou o dataset para ~12000 amostras e tornou o modelo muito mais robusto.
 
-**Decisões de arquitectura:**
-- 4 blocos convolucionais com filtros a duplicar (32→64→128→256) para aprender padrões de complexidade crescente
-- BatchNormalization após cada camada para estabilizar o treino
-- Dropout progressivo para evitar overfitting
-- GlobalAveragePooling2D em vez de Flatten para reduzir parâmetros e melhorar generalização
+### A arquitectura da CNN
 
-### 4. Treino
+Usei 4 blocos convolucionais com o número de filtros a duplicar em cada camada (32→64→128→256). A ideia é que as primeiras camadas detectam padrões simples no espectrograma e as camadas mais profundas combinam esses padrões para reconhecer estruturas musicais mais complexas.
 
-- **Optimizador:** Adam com learning rate 0.001
-- **Loss:** Sparse Categorical Crossentropy
-- **Batch size:** 64
-- **Early stopping:** patience=15 (parou ao epoch 54)
-- **ReduceLROnPlateau:** reduz o learning rate quando estagna
+Adicionei BatchNormalization e Dropout em cada bloco para evitar overfitting, e usei GlobalAveragePooling2D no final em vez de Flatten para reduzir parâmetros.
 
-### 5. Previsão
+### Majority voting na previsão
 
-Na previsão de um ficheiro novo, o modelo analisa cada segmento de 5 segundos individualmente e combina as probabilidades de todos os segmentos (majority voting). O género final é o que obteve maior probabilidade média — este método torna o modelo mais robusto a segmentos ambíguos.
+Quando o modelo prevê o género de uma música nova, analisa cada segmento de 5 segundos individualmente e no final combina as probabilidades de todos os segmentos. O género com maior probabilidade média vence. Isto torna o modelo mais robusto — um segmento ambíguo não estraga o resultado final.
 
 ## Resultados
 
@@ -70,23 +50,6 @@ Na previsão de um ficheiro novo, o modelo analisa cada segmento de 5 segundos i
 | Accuracy | 95.82% |
 | Macro F1-score | 0.958 |
 
-### Resultados por género
+O modelo atingiu resultados acima de 0.93 em todos os géneros excepto rock (0.92), que provavelmente confunde com blues e country por partilharem características sonoras semelhantes.
 
-| Género | Precision | Recall | F1-score |
-|---|---|---|---|
-| blues | 0.98 | 0.98 | 0.98 |
-| classical | 0.95 | 0.99 | 0.97 |
-| country | 0.97 | 0.89 | 0.93 |
-| disco | 0.90 | 0.98 | 0.94 |
-| hiphop | 0.98 | 0.98 | 0.98 |
-| jazz | 1.00 | 0.96 | 0.98 |
-| metal | 0.97 | 0.94 | 0.96 |
-| pop | 0.93 | 1.00 | 0.96 |
-| reggae | 0.96 | 0.97 | 0.96 |
-| rock | 0.95 | 0.89 | 0.92 |
-
-O género com pior desempenho foi **rock** (F1=0.92), provavelmente por partilhar características sonoras com blues e country.
-
-## Conclusão
-
-A combinação de segmentação em janelas de 5 segundos, data augmentation no áudio bruto, e uma CNN com regularização adequada permitiu atingir **95.82% de accuracy** — um resultado acima da média para o dataset GTZAN com CNNs standard.
+O treino parou automaticamente ao epoch 54 de 100 porque o early stopping detectou que o modelo não estava a melhorar — sinal de que convergiu bem sem precisar de mais epochs.
