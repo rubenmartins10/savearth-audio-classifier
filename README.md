@@ -1,4 +1,4 @@
-# 🎵 Music Genre Classifier — Savearth AI Challenge
+# Music Genre Classifier — Savearth AI Challenge
 
 Modelo de deep learning para classificação automática de géneros musicais a partir de ficheiros de áudio `.wav`, desenvolvido como parte do AI Code Challenge da Savearth.
 
