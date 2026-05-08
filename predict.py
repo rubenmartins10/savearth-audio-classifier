@@ -5,13 +5,13 @@ import tensorflow as tf
 
 # configurações - têm de ser iguais às do treino
 SAMPLE_RATE = 22050
-SEGMENT_DURATION = 3
+SEGMENT_DURATION = 5
 N_MELS = 128
 IMG_SIZE = 128
 
 # géneros pela mesma ordem que o LabelEncoder usou no treino (ordem alfabética)
 GENRES = ['blues', 'classical', 'country', 'disco', 'hiphop',
-          'jazz', 'metal', 'pop', 'reggae', 'rock']
+        'jazz', 'metal', 'pop', 'reggae', 'rock']
 
 
 def audio_para_segmentos(caminho):
