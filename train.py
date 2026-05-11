@@ -1,4 +1,6 @@
 import os
+import sys
+import argparse
 import numpy as np
 import librosa
 import tensorflow as tf
@@ -8,9 +10,15 @@ from sklearn.metrics import classification_report, f1_score, confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-DATASET_PATH = r"dataset (1)\dataset"
+# aceito o caminho do dataset como argumento de linha de comandos
+# assim funciona em Windows, Mac e Linux sem precisar de alterar o código
+parser = argparse.ArgumentParser(description='Treinar o modelo CNN para classificação de géneros musicais')
+parser.add_argument('--dataset', type=str, default='dataset', help='Caminho para a pasta do dataset')
+args = parser.parse_args()
+
+DATASET_PATH = args.dataset
 SAMPLE_RATE = 22050
-SEGMENT_DURATION = 5   # aumentei de 3 para 5 segundos - mais contexto por segmento
+SEGMENT_DURATION = 5   # cada música é dividida em segmentos de 5 segundos
 N_MELS = 128
 IMG_SIZE = 128
 
@@ -179,8 +187,9 @@ def criar_modelo_cnn(num_classes):
 
 # --- EXECUÇÃO PRINCIPAL ---
 
+print(f"Dataset: {DATASET_PATH}")
 print("A carregar e segmentar os dados (com augmentation)...")
-print("Isto vai demorar mais do que antes — paciência!\n")
+print("Isto vai demorar alguns minutos\n")
 X, y = carregar_dados(DATASET_PATH)
 print(f"\nTotal de segmentos: {len(X)} | Shape: {X.shape}")
 
